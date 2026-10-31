@@ -37,10 +37,10 @@ def load_sample_datasets():
 
     # Drifting Current Batch
     current_df = baseline_df.copy()
-    current_df["amount"] = current_df["amount"].astype(str)  # Type mismatch
-    current_df.drop(columns=["payment_status"], inplace=True)  # Dropped column
-    current_df["promo_code"] = np.random.choice(["SAVE10", "WELCOME", None], size=n)  # New column
-    current_df.loc[0:200, "customer_id"] = np.nan  # Null spike
+    current_df["amount"] = current_df["amount"].astype(str)
+    current_df = current_df.drop(columns=["payment_status"])  # Cleaned drop
+    current_df["promo_code"] = np.random.choice(["SAVE10", "WELCOME", None], size=n)
+    current_df.loc[0:200, "customer_id"] = np.nan
 
     return baseline_df, current_df
 
@@ -89,7 +89,7 @@ with tab1:
         st.subheader("💧 Null Rate Deviation Anomalies")
         if null_spikes:
             null_df = pd.DataFrame(null_spikes)
-            st.dataframe(null_df, use_container_width=True)
+            st.dataframe(null_df, width="stretch")  # Updated width argument
         else:
             st.success("✓ Null rates within normal baseline tolerance limits.")
 
@@ -103,7 +103,7 @@ with tab1:
             labels={"x": "Batch", "y": "Rows"}
         )
         fig.update_layout(height=280, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")  # Updated width argument
 
         st.markdown("""
             <div style="background-color: #1e293b; padding: 15px; border-radius: 8px; border-left: 4px solid #38bdf8;">
