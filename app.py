@@ -1,3 +1,4 @@
+import json
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -26,7 +27,6 @@ def load_sample_datasets():
     np.random.seed(42)
     n = 2000
 
-    # Baseline (Gold/Silver Table)
     baseline_df = pd.DataFrame({
         "order_id": [f"ORD_{1000 + i}" for i in range(n)],
         "customer_id": np.random.randint(100, 999, size=n),
@@ -35,10 +35,9 @@ def load_sample_datasets():
         "created_at": pd.date_range("2026-10-01", periods=n, freq="min")
     })
 
-    # Drifting Current Batch
     current_df = baseline_df.copy()
     current_df["amount"] = current_df["amount"].astype(str)
-    current_df = current_df.drop(columns=["payment_status"])  # Cleaned drop
+    current_df = current_df.drop(columns=["payment_status"])
     current_df["promo_code"] = np.random.choice(["SAVE10", "WELCOME", None], size=n)
     current_df.loc[0:200, "customer_id"] = np.nan
 
@@ -61,9 +60,9 @@ with tab1:
 
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Pipeline Health Score", f"{score} / 100", delta="-20% (Drift Detected)" if score < 100 else "Optimal")
+        st.metric("Pipeline Health Score", f"{score} / 100", delta="-60% (Critical Drift)" if score < 60 else "Warning", delta_color="inverse")
     with col2:
-        st.metric("Total Records Analyzed", f"{volume['current_rows']:,}", f"{volume['pct_change']}% change")
+        st.metric("Total Records Analyzed", f"{volume['current_rows']:,}", f"{volume['pct_change']}% volume delta")
     with col3:
         st.metric("Missing Columns", f"{len(drift['missing_columns'])}", delta="Critical Alert" if drift['missing_columns'] else "Safe", delta_color="inverse")
     with col4:
@@ -89,7 +88,12 @@ with tab1:
         st.subheader("💧 Null Rate Deviation Anomalies")
         if null_spikes:
             null_df = pd.DataFrame(null_spikes)
-            st.dataframe(null_df, width="stretch")  # Updated width argument
+            # Format numbers as clean percentages
+            null_df["baseline_null_pct"] = null_df["baseline_null_pct"].apply(lambda x: f"{x:.2f}%")
+            null_df["current_null_pct"] = null_df["current_null_pct"].apply(lambda x: f"{x:.2f}%")
+            null_df["delta_pct"] = null_df["delta_pct"].apply(lambda x: f"+{x:.2f}%")
+            null_df.columns = ["Column", "Baseline Null", "Current Null", "Deviation Spike"]
+            st.dataframe(null_df, width="stretch", hide_index=True)
         else:
             st.success("✓ Null rates within normal baseline tolerance limits.")
 
@@ -99,17 +103,32 @@ with tab1:
             x=["Baseline Count", "Current Batch"],
             y=[volume["baseline_rows"], volume["current_rows"]],
             color=["Baseline", "Current"],
-            title="Batch Volume Comparison",
             labels={"x": "Batch", "y": "Rows"}
         )
-        fig.update_layout(height=280, margin=dict(l=20, r=20, t=40, b=20))
-        st.plotly_chart(fig, width="stretch")  # Updated width argument
+        fig.update_layout(height=260, margin=dict(l=20, r=20, t=30, b=20), showlegend=False)
+        st.plotly_chart(fig, width="stretch")
 
         st.markdown("""
-            <div style="background-color: #1e293b; padding: 15px; border-radius: 8px; border-left: 4px solid #38bdf8;">
-                <h4 style="margin: 0 0 5px 0; color: #f8fafc;">Consultant Executive Assessment</h4>
-                <p style="font-size: 13px; color: #94a3b8; margin: 0;">
-                    High-priority structural failure detected. Recommending quarantine of the current batch to prevent downstream analytics corruption in the presentation layer.
+            <div style="background-color: #1e293b; padding: 16px; border-radius: 8px; border-left: 4px solid #ef4444; margin-bottom: 12px;">
+                <h4 style="margin: 0 0 6px 0; color: #f8fafc;">Consultant Executive Assessment</h4>
+                <p style="font-size: 13px; color: #cbd5e1; margin: 0; line-height: 1.5;">
+                    <strong>Action Required:</strong> Immediate quarantine recommended. Downstream dbt / SQL transformations relying on <code>payment_status</code> and numeric <code>amount</code> will fail in production.
                 </p>
             </div>
         """, unsafe_allow_html=True)
+
+        # Audit report download
+        report_data = {
+            "health_score": score,
+            "status": "FAIL - QUARANTINE",
+            "schema_drift": drift,
+            "null_anomalies": null_spikes,
+            "recommendation": "Quarantine batch ORD_BATCH_20261031. Refactor upstream ingestion schema."
+        }
+        st.download_button(
+            label="📥 Download Executive Incident Memo (JSON)",
+            data=json.dumps(report_data, indent=2),
+            file_name="dataops_incident_audit.json",
+            mime="application/json",
+            use_container_width=True
+        )
